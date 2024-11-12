@@ -1,0 +1,20 @@
+services:
+  bot:
+    image: ${BOT_NAME}
+    container_name: ${BOT_NAME}
+    stop_signal: SIGINT
+    build:
+      context: .
+    working_dir: "/usr/src/app/bot"
+    volumes:
+      - .:/usr/src/app/bot
+    command: python3 -u bot.py
+    restart: always
+    env_file:
+      - ".env"
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200k"
+        max-file: "10"
