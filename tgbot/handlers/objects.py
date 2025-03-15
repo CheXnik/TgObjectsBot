@@ -1,11 +1,16 @@
 import json
+import logging
+from typing import List, Dict
 
 from aiogram import Router, html, F, exceptions
+from aiogram.client.default import Default
 from aiogram.types import BufferedInputFile, Message
 
 from tgbot.keyboards import reply
 
 router = Router()
+logger = logging.getLogger(__name__)
+
 SHARED_TITLES_TYPES = {
     0: '🎃 User_ID',
     1: '🏠 Chat_ID',
@@ -14,7 +19,25 @@ SHARED_TITLES_TYPES = {
 }
 
 
-def create_caption(object_info: dict, important_info: list[list] = None) -> tuple:
+def get_safe_message_dict(message: Dict) -> Dict:
+    def unpack(obj: Dict):
+        temp_dict = {}
+
+        for key, value in obj.items():
+            if not isinstance(value, dict):
+                if isinstance(value, Default):
+                    temp_dict[key] = value.name
+                else:
+                    temp_dict[key] = value
+            else:
+                temp_dict[key] = unpack(value)
+
+        return temp_dict
+
+    return unpack(message)
+
+
+def create_caption(object_info: Dict, important_info: List[List] = None) -> tuple:
     important_caption = ''
 
     if important_info:
@@ -25,11 +48,11 @@ def create_caption(object_info: dict, important_info: list[list] = None) -> tupl
     return caption, important_caption
 
 
-async def send_object_info(message: Message, important_info: list[list] = None):
-    all_info = message.model_dump()
-    file = BufferedInputFile(json.dumps(all_info, indent=2).encode(), filename=f'{message.content_type.value}.json')
+async def send_object_info(message: Message, important_info: List[List] = None):
+    message_dict = get_safe_message_dict(message.model_dump())
+    file = BufferedInputFile(json.dumps(message_dict).encode(), filename=f'{message.content_type.value}.json')
 
-    object_info = message.model_dump().get(message.content_type)
+    object_info = message_dict.get(message.content_type)
     caption, important_caption = create_caption(object_info, important_info)
 
     try:
@@ -101,4 +124,12 @@ async def get_chat_object(message: Message):
 
 @router.message()
 async def get_other_objects(message: Message):
-    await send_object_info(message=message)
+    important_info = [
+        [html.bold('👁 BOT HTML'), html.code(html.quote(message.html_text))],
+        [
+            html.bold('👁 USER HTML'),
+            html.code(html.quote(message.html_text.replace('tg-emoji', 'emoji').replace('emoji-id', 'id')))
+        ]
+    ]
+
+    await send_object_info(message=message, important_info=important_info)
